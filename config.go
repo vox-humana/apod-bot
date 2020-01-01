@@ -8,13 +8,9 @@ import (
 	"path/filepath"
 )
 
-type configuration struct {
-	LastSentDate string
-}
-
 const configFile = "conf.txt"
 
-func getConfigFilePath() string {
+func configFilePath() string {
 	ex, err := os.Executable()
 	if err != nil {
 		panic(err)
@@ -24,7 +20,7 @@ func getConfigFilePath() string {
 }
 
 func readLastSentDate() string {
-	dateString, err := ioutil.ReadFile(getConfigFilePath())
+	dateString, err := ioutil.ReadFile(configFilePath())
 	if err != nil {
 		fmt.Println("Can't read config:", err)
 	}
@@ -32,7 +28,7 @@ func readLastSentDate() string {
 }
 
 func saveCurrentDate(dateString string) {
-	err := ioutil.WriteFile(getConfigFilePath(), []byte(dateString), 0644)
+	err := ioutil.WriteFile(configFilePath(), []byte(dateString), 0644)
 	if err != nil {
 		fmt.Println("Can't write config:", err)
 	}

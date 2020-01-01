@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -16,53 +20,140 @@ const (
 	apodAPIURL  = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=%s"
 )
 
-type apiPicture struct {
+type picture struct {
 	Copyright    string `json:"copyright"`
 	Date         string `json:"date"`
 	Explanation  string `json:"explanation"`
 	FullImageURL string `json:"hdurl"`
 	Title        string `json:"title"`
 	ImageURL     string `json:"url"`
+	Link         string
 }
 
-func main() {
-	flag.StringVar(&tamTamToken, "token", "", "bot api token")
-	flag.Int64Var(&tamTamChatID, "chat", 0, "destination chat id")
-	flag.Parse()
-
-	if len(tamTamToken) == 0 || tamTamChatID == 0 {
-		log.Fatalln("Wrong arguments")
+func requestPicture(reader io.Reader) picture {
+	body, err := ioutil.ReadAll(reader)
+	if err != nil {
+		log.Fatalln(err)
 	}
 
-	lastDate := readLastSentDate()
-	fmt.Println("Last sent date: ", lastDate)
-
-	time := time.Now()
-	currentDate := time.Format("2006-01-02")
-	if lastDate == currentDate {
-		fmt.Println("Nothing to do")
-		return
+	var item picture
+	err = json.Unmarshal(body, &item)
+	if err != nil {
+		log.Fatalln(err)
 	}
+	return item
+}
 
+func checkResponseStatus(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("Bad response status: %s %s", resp.Status, string(body))
+	}
+	return nil
+}
+
+func firstWords(s string, count int) string {
+	runes := []rune(s)
+	for i := range runes {
+		if unicode.IsSpace(runes[i]) {
+			count--
+			if count == 0 {
+				return string(runes[0:i])
+			}
+		}
+	}
+	return s
+}
+
+func firstSentences(s string, count int) string {
+	for i := range s {
+		c := s[i]
+		if strings.ContainsAny(string(c), "?.!") {
+			count--
+			if count == 0 {
+				return string(s[0:i])
+			}
+		}
+	}
+	return s
+}
+
+func pictureURL(p picture) string {
+	const dateFormat = "060102"
+	pictureTime, err := time.Parse("2006-01-02", p.Date)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	pictureDate := pictureTime.Format(dateFormat)
+	if pictureDate != time.Now().Format(dateFormat) {
+		log.Fatalln("Picture's date doesn't match current date:", pictureDate)
+	}
+	return fmt.Sprintf(apodPageURL, pictureDate)
+}
+
+func makeRequest(currentDate string) io.ReadCloser {
 	apiURL := fmt.Sprintf(apodAPIURL, currentDate)
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	var picture apiPicture
-	err = json.Unmarshal(body, &picture)
+	fmt.Println("APOD API response:", resp.StatusCode)
+	err = checkResponseStatus(resp)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	shortDate := time.Format("060102")
-	pageURL := fmt.Sprintf(apodPageURL, shortDate)
-	sendAPIPicture(picture, pageURL)
+	return resp.Body
+}
+
+func openTestFile(fileName string) io.ReadCloser {
+	f, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return f
+}
+
+func main() {
+	var service, token string
+	var chatID int64
+	var err error
+	flag.StringVar(&token, "token", "", "bot api token")
+	flag.Int64Var(&chatID, "chat", 0, "destination chat id")
+	flag.StringVar(&service, "service", "tt", "tg or tt")
+	flag.Parse()
+
+	if len(token) == 0 || chatID == 0 {
+		log.Fatalln("Wrong arguments")
+	}
+
+	lastDate := readLastSentDate()
+	fmt.Println("Last sent date:", lastDate)
+
+	currentTime := time.Now()
+	currentDate := currentTime.Format("2006-01-02")
+	if lastDate == currentDate {
+		fmt.Println("Nothing to do")
+		return
+	}
+
+	reader := makeRequest(currentDate)
+	//reader, _ := os.Open("api-2019-12-25.json")
+	defer reader.Close()
+	item := requestPicture(reader)
+	item.Link = pictureURL(item)
+
+	var send func(picture, string, int64) error
+	if service == "tg" {
+		send = tgSendPicture
+	} else {
+		send = ttSendPicture
+	}
+	err = send(item, token, chatID)
+	if err != nil {
+		log.Fatalln(strings.ToUpper(service), err)
+	}
+
 	saveCurrentDate(currentDate)
 }

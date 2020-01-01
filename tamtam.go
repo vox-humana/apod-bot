@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"path"
@@ -15,21 +14,18 @@ import (
 )
 
 const (
-	uploadTemplate        = "https://botapi.tamtam.chat/uploads?access_token=%s&type=%s"
-	sendMessageTemplate   = "https://botapi.tamtam.chat/messages?access_token=%s&chat_id=%d"
-	maxMessageSendRetries = 10
-	fileAttachmentType    = "file"
-	imageAttachmentType   = "image"
-)
-
-var (
-	tamTamToken  string
-	tamTamChatID int64
+	ttUploadTemplate        = "https://botapi.tamtam.chat/uploads?access_token=%s&type=%s"
+	ttSendMessageTemplate   = "https://botapi.tamtam.chat/messages?access_token=%s&chat_id=%d"
+	ttMaxMessageSendRetries = 10
+	ttMessageSendRetryDelay = 2
+	ttFileAttachmentType    = "file"
+	ttImageAttachmentType   = "image"
 )
 
 type message struct {
 	Text        string              `json:"text"`
 	Attachments []messageAttachment `json:"attachments"`
+	Notify      bool                `json:"notify"`
 }
 
 type messageAttachment struct {
@@ -41,8 +37,8 @@ type attachmentPayload struct {
 	Token string `json:"token"`
 }
 
-func getUploadURL(attachmentType string) (string, error) {
-	url := fmt.Sprintf(uploadTemplate, tamTamToken, attachmentType)
+func createUploadURL(attachmentType string, token string) (string, error) {
+	url := fmt.Sprintf(ttUploadTemplate, token, attachmentType)
 	req, err := http.Post(url, "application/json", nil)
 	if err != nil {
 		return "", err
@@ -53,7 +49,7 @@ func getUploadURL(attachmentType string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Get upload URL response body:", string(body))
+	fmt.Println("TT: Get upload URL response body:", string(body))
 
 	var response struct {
 		URL string `json:"url"`
@@ -95,7 +91,7 @@ func uploadFile(sourceURL string, destinationURL string, isImage bool) (string, 
 
 	defer uploadResp.Body.Close()
 	body, err := ioutil.ReadAll(uploadResp.Body)
-	fmt.Println("Upload attachment response body:", string(body))
+	fmt.Println("TT: Upload attachment response body:", string(body))
 
 	var response interface{}
 	err = json.Unmarshal(body, &response)
@@ -111,7 +107,6 @@ func uploadFile(sourceURL string, destinationURL string, isImage bool) (string, 
 		}
 		photos := response["photos"].(map[string]interface{})
 		for _, value := range photos {
-			fmt.Println("extracting from", value)
 			values := value.(map[string]interface{})
 			token, prs := values["token"]
 			if prs {
@@ -128,81 +123,95 @@ func uploadFile(sourceURL string, destinationURL string, isImage bool) (string, 
 		}
 		return response.Token, nil
 	}
-	return "", errors.New("Can't extract token" + string(body))
+	return "", errors.New("Can't extract token from" + string(body))
 }
 
-func uploadAttachment(remoteURL string, attachmentType string) (string, error) {
-	uploadURL, err := getUploadURL(attachmentType)
+func uploadAttachment(remoteURL string, attachmentType string, token string) (string, error) {
+	uploadURL, err := createUploadURL(attachmentType, token)
 	if err != nil {
 		return "", err
 	}
 
-	token, err := uploadFile(remoteURL, uploadURL, attachmentType == imageAttachmentType)
+	uploadToken, err := uploadFile(remoteURL, uploadURL, attachmentType == ttImageAttachmentType)
 	if err != nil {
 		return "", err
 	}
-	return token, nil
+	return uploadToken, nil
 }
 
-func postMessage(url string, message interface{}, numberOfRetries int) {
+func ttSendMessage(url string, message interface{}, numberOfRetries int) error {
 	json, err := json.Marshal(message)
 	if err != nil {
-		log.Fatalln("Failed to create message JSON")
-		return
+		return errors.New("Failed to create message JSON")
 	}
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(json))
 	if err != nil {
-		log.Fatalln("Failed to send message")
+		return err
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("Post message (%d retries) response status: %d\n", numberOfRetries, resp.StatusCode)
-	// retry on 400
+	fmt.Printf("TT: Post message (%d retries) response status: %d\n", numberOfRetries, resp.StatusCode)
+
 	if resp.StatusCode == http.StatusBadRequest {
-		if numberOfRetries == maxMessageSendRetries {
-			fmt.Println("Max send retries exceed")
-			return
+		if numberOfRetries == ttMaxMessageSendRetries {
+			return errors.New("Max send retries exceed")
 		}
-		time.Sleep(2 * time.Second)
-		postMessage(url, message, numberOfRetries+1)
-		return
+		time.Sleep(ttMessageSendRetryDelay * time.Second)
+		return ttSendMessage(url, message, numberOfRetries+1)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("bad status: %s\n", resp.Status)
+		return fmt.Errorf("Bad response status: %s", resp.Status)
 	}
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
-	fmt.Println("Post message response body:", string(body))
+	fmt.Println("TT: Post message response body:", string(body))
+	return nil
 }
 
-func sendAPIPicture(picture apiPicture, link string) {
-	fileToken, err := uploadAttachment(picture.FullImageURL, fileAttachmentType)
+func ttSendPicture(picture picture, token string, chat int64) error {
+	fileToken, err := uploadAttachment(picture.FullImageURL, ttFileAttachmentType, token)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 
 	if len(fileToken) == 0 {
-		log.Fatalln("empty upload file token")
+		return errors.New("Empty upload file token")
 	}
 
-	imageToken, err := uploadAttachment(picture.ImageURL, imageAttachmentType)
+	imageToken, err := uploadAttachment(picture.ImageURL, ttImageAttachmentType, token)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 
 	if len(imageToken) == 0 {
-		log.Fatalln("empty upload image token")
+		return errors.New("Empty upload image token")
 	}
 
-	fileAttachment := messageAttachment{Type: fileAttachmentType, Payload: attachmentPayload{fileToken}}
-	imageAttachment := messageAttachment{Type: imageAttachmentType, Payload: attachmentPayload{imageToken}}
+	imageAttachment := messageAttachment{Type: ttImageAttachmentType, Payload: attachmentPayload{imageToken}}
+	fileAttachment := messageAttachment{Type: ttFileAttachmentType, Payload: attachmentPayload{fileToken}}
 
-	url := fmt.Sprintf(sendMessageTemplate, tamTamToken, tamTamChatID)
+	url := fmt.Sprintf(ttSendMessageTemplate, token, chat)
 
-	text := picture.Title + "\n" + link
+	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗" + picture.Link
 
-	postMessage(url, message{text, []messageAttachment{imageAttachment}}, 0)
-	postMessage(url, message{"", []messageAttachment{fileAttachment}}, 0)
+	err = ttSendMessage(url, message{text, []messageAttachment{imageAttachment}, true}, 0)
+	if err != nil {
+		return err
+	}
+
+	fileCaption := ""
+	if len(picture.Copyright) > 0 {
+		fileCaption = "© " + picture.Copyright
+	}
+	err = ttSendMessage(url, message{fileCaption, []messageAttachment{fileAttachment}, false}, 0)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
