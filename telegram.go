@@ -62,7 +62,8 @@ func tgSendPicture(picture picture, token string, chat int64) error {
 	explanation := firstSentences(picture.Explanation, 2) // TODO: max 1024
 	photoCaption := "*" + picture.Title + "*\n" + explanation + "…\n" + picture.Link
 
-	photo := tgPhotoMessage{chat, photoCaption, picture.FullImageURL}
+	// Somehow TG sometimes doesn't like full image URLs (too big?)
+	photo := tgPhotoMessage{chat, photoCaption, picture.ImageURL}
 	err := tgSendMessage(photo, tgSendPhotoTemplate, token)
 	if err != nil {
 		return err
