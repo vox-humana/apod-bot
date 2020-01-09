@@ -115,6 +115,13 @@ func openTestFile(fileName string) io.ReadCloser {
 	return f
 }
 
+func removeAds(p picture) {
+	adStartIndex := strings.Index(p.Explanation, "   ")
+	if adStartIndex != -1 {
+		p.Explanation = p.Explanation[0:adStartIndex]
+	}
+}
+
 func main() {
 	var service, token string
 	var chatID int64
@@ -139,9 +146,11 @@ func main() {
 	}
 
 	reader := makeRequest(currentDate)
-	//reader, _ := os.Open("api-2019-12-25.json")
+	//reader, _ := os.Open("api-2020-01-01.json")
 	defer reader.Close()
 	item := requestPicture(reader)
+	removeAds(item)
+
 	item.Link = pictureURL(item)
 
 	var send func(picture, string, int64) error
