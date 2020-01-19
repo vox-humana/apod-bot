@@ -15,18 +15,21 @@ import (
 )
 
 const (
-	apodURL     = "https://apod.nasa.gov/apod.rss"
-	apodPageURL = "https://apod.nasa.gov/apod/ap%s.html"
-	apodAPIURL  = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=%s"
+	apodURL        = "https://apod.nasa.gov/apod.rss"
+	apodPageURL    = "https://apod.nasa.gov/apod/ap%s.html"
+	apodAPIURL     = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=%s"
+	mediaTypeImage = "image"
+	mediaTypeVideo = "video"
 )
 
 type picture struct {
 	Copyright    string `json:"copyright"`
 	Date         string `json:"date"`
 	Explanation  string `json:"explanation"`
-	FullImageURL string `json:"hdurl"`
 	Title        string `json:"title"`
-	ImageURL     string `json:"url"`
+	MediaType    string `json:"media_type"`
+	FullImageURL string `json:"hdurl"`
+	URL          string `json:"url"`
 	Link         string
 }
 
@@ -115,7 +118,7 @@ func openTestFile(fileName string) io.ReadCloser {
 	return f
 }
 
-func removeAds(p picture) {
+func removeAds(p *picture) {
 	adStartIndex := strings.Index(p.Explanation, "   ")
 	if adStartIndex != -1 {
 		p.Explanation = p.Explanation[0:adStartIndex]
@@ -149,15 +152,26 @@ func main() {
 	//reader, _ := os.Open("api-2020-01-01.json")
 	defer reader.Close()
 	item := requestPicture(reader)
-	removeAds(item)
-
+	removeAds(&item)
 	item.Link = pictureURL(item)
 
 	var send func(picture, string, int64) error
 	if service == "tg" {
-		send = tgSendPicture
+		if item.MediaType == mediaTypeImage {
+			send = tgSendPicture
+		} else if item.MediaType == mediaTypeVideo {
+			send = tgSendVideo
+		} else {
+			log.Fatalln("Unsupported TG media_type", item.MediaType)
+		}
 	} else {
-		send = ttSendPicture
+		if item.MediaType == mediaTypeImage {
+			send = ttSendPicture
+		} else if item.MediaType == mediaTypeVideo {
+			send = ttSendVideo
+		} else {
+			log.Fatalln("Unsupported TT media_type", item.MediaType)
+		}
 	}
 	err = send(item, token, chatID)
 	if err != nil {

@@ -183,7 +183,7 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 		return errors.New("Empty upload file token")
 	}
 
-	imageToken, err := uploadAttachment(picture.ImageURL, ttImageAttachmentType, token)
+	imageToken, err := uploadAttachment(picture.URL, ttImageAttachmentType, token)
 	if err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 
 	url := fmt.Sprintf(ttSendMessageTemplate, token, chat)
 
-	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗" + picture.Link
+	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗 " + picture.Link
 
 	err = ttSendMessage(url, message{text, []messageAttachment{imageAttachment}, true}, 0)
 	if err != nil {
@@ -214,4 +214,10 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 	}
 
 	return nil
+}
+
+func ttSendVideo(picture picture, token string, chat int64) error {
+	url := fmt.Sprintf(ttSendMessageTemplate, token, chat)
+	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗 " + picture.URL
+	return ttSendMessage(url, message{text, []messageAttachment{}, true}, 0)
 }

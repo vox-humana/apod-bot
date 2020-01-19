@@ -63,7 +63,7 @@ func tgSendPicture(picture picture, token string, chat int64) error {
 	photoCaption := "*" + picture.Title + "*\n" + explanation + "…\n" + picture.Link
 
 	// Somehow TG sometimes doesn't like full image URLs (too big?)
-	photo := tgPhotoMessage{chat, photoCaption, picture.ImageURL}
+	photo := tgPhotoMessage{chat, photoCaption, picture.URL}
 	err := tgSendMessage(photo, tgSendPhotoTemplate, token)
 	if err != nil {
 		return err
@@ -80,4 +80,10 @@ func tgSendPicture(picture picture, token string, chat int64) error {
 	}
 
 	return nil
+}
+
+func tgSendVideo(picture picture, token string, chat int64) error {
+	text := "[" + picture.Title + "](" + picture.URL + ")\n" + picture.Explanation
+	message := tgMessage{chat, text}
+	return tgSendMessage(message, tgSendMessageTemplate, token)
 }
