@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -36,14 +37,17 @@ type picture struct {
 func requestPicture(reader io.Reader) picture {
 	body, err := ioutil.ReadAll(reader)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
 
 	var item picture
 	err = json.Unmarshal(body, &item)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
+
+	// Sometimes copyright contains new lines :shrug:
+	item.Copyright = strings.ReplaceAll(item.Copyright, "\n", " ")
 	return item
 }
 
@@ -85,11 +89,11 @@ func pictureURL(p picture) string {
 	const dateFormat = "060102"
 	pictureTime, err := time.Parse("2006-01-02", p.Date)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
 	pictureDate := pictureTime.Format(dateFormat)
 	if pictureDate != time.Now().Format(dateFormat) {
-		log.Fatalln("Picture's date doesn't match current date:", pictureDate)
+		logError("Picture's date doesn't match current date:", pictureDate)
 	}
 	return fmt.Sprintf(apodPageURL, pictureDate)
 }
@@ -98,13 +102,13 @@ func makeRequest(currentDate string) io.ReadCloser {
 	apiURL := fmt.Sprintf(apodAPIURL, currentDate)
 	resp, err := http.Get(apiURL)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
 
 	fmt.Println("APOD API response:", resp.StatusCode)
 	err = checkResponseStatus(resp)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
 
 	return resp.Body
@@ -113,7 +117,7 @@ func makeRequest(currentDate string) io.ReadCloser {
 func openTestFile(fileName string) io.ReadCloser {
 	f, err := os.Open(fileName)
 	if err != nil {
-		log.Fatalln(err)
+		logError(err)
 	}
 	return f
 }
@@ -125,17 +129,44 @@ func removeAds(p *picture) {
 	}
 }
 
+var sendError func(text string) error = func(string) error {
+	return nil
+}
+
+func logError(v ...interface{}) {
+	appname := filepath.Base(os.Args[0])
+	text := fmt.Sprintln(v...)
+	sendError("Error from `" + appname + "`: " + text)
+	log.Fatalln(text)
+}
+
 func main() {
 	var service, token string
 	var chatID int64
 	var err error
+	var errChatID int64
 	flag.StringVar(&token, "token", "", "bot api token")
 	flag.Int64Var(&chatID, "chat", 0, "destination chat id")
 	flag.StringVar(&service, "service", "tt", "tg or tt")
+	flag.Int64Var(&errChatID, "err_chat", 0, "chat for error notification")
 	flag.Parse()
 
 	if len(token) == 0 || chatID == 0 {
 		log.Fatalln("Wrong arguments")
+	}
+
+	if errChatID != 0 {
+		if service == "tg" {
+			sendError = func(s string) error {
+				message := tgMessage{errChatID, s}
+				return tgSendMessage(message, tgSendMessageTemplate, token)
+			}
+		} else {
+			sendError = func(s string) error {
+				url := fmt.Sprintf(ttSendMessageTemplate, token, errChatID)
+				return ttSendMessage(url, ttMessage{s, []ttMessageAttachment{}, true}, 0)
+			}
+		}
 	}
 
 	lastDate := readLastSentDate()
@@ -162,7 +193,7 @@ func main() {
 		} else if item.MediaType == mediaTypeVideo {
 			send = tgSendVideo
 		} else {
-			log.Fatalln("Unsupported TG media_type", item.MediaType)
+			logError("Unsupported TG media_type", item.MediaType)
 		}
 	} else {
 		if item.MediaType == mediaTypeImage {
@@ -170,12 +201,12 @@ func main() {
 		} else if item.MediaType == mediaTypeVideo {
 			send = ttSendVideo
 		} else {
-			log.Fatalln("Unsupported TT media_type", item.MediaType)
+			logError("Unsupported TT media_type", item.MediaType)
 		}
 	}
 	err = send(item, token, chatID)
 	if err != nil {
-		log.Fatalln(strings.ToUpper(service), err)
+		logError(strings.ToUpper(service), err)
 	}
 
 	saveCurrentDate(currentDate)

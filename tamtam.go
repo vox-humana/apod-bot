@@ -22,18 +22,18 @@ const (
 	ttImageAttachmentType   = "image"
 )
 
-type message struct {
-	Text        string              `json:"text"`
-	Attachments []messageAttachment `json:"attachments"`
-	Notify      bool                `json:"notify"`
+type ttMessage struct {
+	Text        string                `json:"text"`
+	Attachments []ttMessageAttachment `json:"attachments"`
+	Notify      bool                  `json:"notify"`
 }
 
-type messageAttachment struct {
-	Type    string            `json:"type"`
-	Payload attachmentPayload `json:"payload"`
+type ttMessageAttachment struct {
+	Type    string              `json:"type"`
+	Payload ttAttachmentPayload `json:"payload"`
 }
 
-type attachmentPayload struct {
+type ttAttachmentPayload struct {
 	Token string `json:"token"`
 }
 
@@ -192,14 +192,14 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 		return errors.New("Empty upload image token")
 	}
 
-	imageAttachment := messageAttachment{Type: ttImageAttachmentType, Payload: attachmentPayload{imageToken}}
-	fileAttachment := messageAttachment{Type: ttFileAttachmentType, Payload: attachmentPayload{fileToken}}
+	imageAttachment := ttMessageAttachment{Type: ttImageAttachmentType, Payload: ttAttachmentPayload{imageToken}}
+	fileAttachment := ttMessageAttachment{Type: ttFileAttachmentType, Payload: ttAttachmentPayload{fileToken}}
 
 	url := fmt.Sprintf(ttSendMessageTemplate, token, chat)
 
 	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗 " + picture.Link
 
-	err = ttSendMessage(url, message{text, []messageAttachment{imageAttachment}, true}, 0)
+	err = ttSendMessage(url, ttMessage{text, []ttMessageAttachment{imageAttachment}, true}, 0)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 	if len(picture.Copyright) > 0 {
 		fileCaption = "© " + picture.Copyright
 	}
-	err = ttSendMessage(url, message{fileCaption, []messageAttachment{fileAttachment}, false}, 0)
+	err = ttSendMessage(url, ttMessage{fileCaption, []ttMessageAttachment{fileAttachment}, false}, 0)
 	if err != nil {
 		return err
 	}
@@ -219,5 +219,5 @@ func ttSendPicture(picture picture, token string, chat int64) error {
 func ttSendVideo(picture picture, token string, chat int64) error {
 	url := fmt.Sprintf(ttSendMessageTemplate, token, chat)
 	text := "🌌" + picture.Title + "\n\n" + picture.Explanation + "\n🔗 " + picture.URL
-	return ttSendMessage(url, message{text, []messageAttachment{}, true}, 0)
+	return ttSendMessage(url, ttMessage{text, []ttMessageAttachment{}, true}, 0)
 }
