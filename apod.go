@@ -158,7 +158,7 @@ func main() {
 	if errChatID != 0 {
 		if service == "tg" {
 			sendError = func(s string) error {
-				message := tgMessage{errChatID, s}
+				message := tgMessage{errChatID, s, ""}
 				return tgSendMessage(message, tgSendMessageTemplate, token)
 			}
 		} else {

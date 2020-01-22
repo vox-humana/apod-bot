@@ -9,14 +9,17 @@ import (
 )
 
 const (
-	tgSendMessageTemplate = "https://api.telegram.org/bot%s/sendMessage?parse_mode=Markdown"
+	tgSendMessageTemplate = "https://api.telegram.org/bot%s/sendMessage"
 	tgSendPhotoTemplate   = "https://api.telegram.org/bot%s/sendPhoto?parse_mode=Markdown"
 	tgSendFileTemplate    = "https://api.telegram.org/bot%s/sendDocument?parse_mode=Markdown"
+	tgParseModeMarkdown   = "Markdown"
+	tgParseModeHTML       = "HTML"
 )
 
 type tgMessage struct {
-	Chat int64  `json:"chat_id"`
-	Text string `json:"text"`
+	Chat      int64  `json:"chat_id"`
+	Text      string `json:"text"`
+	ParseMode string `json:"parse_mode"`
 }
 
 type tgPhotoMessage struct {
@@ -84,6 +87,6 @@ func tgSendPicture(picture picture, token string, chat int64) error {
 
 func tgSendVideo(picture picture, token string, chat int64) error {
 	text := "[" + picture.Title + "](" + picture.URL + ")\n" + picture.Explanation
-	message := tgMessage{chat, text}
+	message := tgMessage{chat, text, tgParseModeMarkdown}
 	return tgSendMessage(message, tgSendMessageTemplate, token)
 }
