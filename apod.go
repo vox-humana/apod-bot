@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 )
 
 const (
@@ -34,7 +33,7 @@ type picture struct {
 	Link         string
 }
 
-func requestPicture(reader io.Reader) picture {
+func readPicture(reader io.Reader) picture {
 	body, err := ioutil.ReadAll(reader)
 	if err != nil {
 		logError(err)
@@ -46,9 +45,18 @@ func requestPicture(reader io.Reader) picture {
 		logError(err)
 	}
 
+	item.removeAds()
+
 	// Sometimes copyright contains new lines :shrug:
 	item.Copyright = strings.ReplaceAll(item.Copyright, "\n", " ")
 	return item
+}
+
+func (p *picture) removeAds() {
+	adStartIndex := strings.Index(p.Explanation, "   ")
+	if adStartIndex != -1 {
+		p.Explanation = p.Explanation[0:adStartIndex]
+	}
 }
 
 func checkResponseStatus(resp *http.Response) error {
@@ -59,18 +67,18 @@ func checkResponseStatus(resp *http.Response) error {
 	return nil
 }
 
-func firstWords(s string, count int) string {
-	runes := []rune(s)
-	for i := range runes {
-		if unicode.IsSpace(runes[i]) {
-			count--
-			if count == 0 {
-				return string(runes[0:i])
-			}
-		}
-	}
-	return s
-}
+// func firstWords(s string, count int) string {
+// 	runes := []rune(s)
+// 	for i := range runes {
+// 		if unicode.IsSpace(runes[i]) {
+// 			count--
+// 			if count == 0 {
+// 				return string(runes[0:i])
+// 			}
+// 		}
+// 	}
+// 	return s
+// }
 
 func firstSentences(s string, count int) string {
 	for i := range s {
@@ -120,13 +128,6 @@ func openTestFile(fileName string) io.ReadCloser {
 		logError(err)
 	}
 	return f
-}
-
-func removeAds(p *picture) {
-	adStartIndex := strings.Index(p.Explanation, "   ")
-	if adStartIndex != -1 {
-		p.Explanation = p.Explanation[0:adStartIndex]
-	}
 }
 
 var sendError func(text string) error = func(string) error {
@@ -182,8 +183,7 @@ func main() {
 	reader := makeRequest(currentDate)
 	//reader, _ := os.Open("api-2020-01-01.json")
 	defer reader.Close()
-	item := requestPicture(reader)
-	removeAds(&item)
+	item := readPicture(reader)
 	item.Link = pictureURL(item)
 
 	var send func(picture, string, int64) error

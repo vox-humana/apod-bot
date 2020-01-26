@@ -161,15 +161,14 @@ func ttSendMessage(url string, message interface{}, numberOfRetries int) error {
 		return ttSendMessage(url, message, numberOfRetries+1)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Bad response status: %s", resp.Status)
-	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Bad response status: %s (%s)", resp.Status, string(body))
+	}
 
-	fmt.Println("TT: Post message response body:", string(body))
 	return nil
 }
 
