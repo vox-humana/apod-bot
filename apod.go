@@ -54,14 +54,6 @@ func makeHTMLRequest(currentTime time.Time) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func openTestFile(fileName string) (io.ReadCloser, error) {
-	f, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
-}
-
 func pictureURL(p picture) string {
 	const dateFormat = "060102"
 	pictureTime, err := time.Parse("2006-01-02", p.Date)

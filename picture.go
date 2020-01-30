@@ -77,6 +77,7 @@ func makePictureFromHTML(reader io.Reader, p *picture) error {
 	p.FullImageURL = fullImageURL
 	p.MediaType = mediaType
 	p.Date = pictureDate
+	p.trim()
 	return nil
 }
 
@@ -92,6 +93,7 @@ func makePictureFromAPI(reader io.Reader, p *picture) error {
 	}
 
 	p.removeAds()
+	p.trim()
 	return nil
 }
 
