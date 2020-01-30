@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,82 +13,53 @@ import (
 )
 
 const (
-	apodURL        = "https://apod.nasa.gov/apod.rss"
 	apodPageURL    = "https://apod.nasa.gov/apod/ap%s.html"
 	apodAPIURL     = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=%s"
+	apodSiteURL    = "https://apod.nasa.gov/apod/"
 	mediaTypeImage = "image"
 	mediaTypeVideo = "video"
 )
 
-type picture struct {
-	Copyright    string `json:"copyright"`
-	Date         string `json:"date"`
-	Explanation  string `json:"explanation"`
-	Title        string `json:"title"`
-	MediaType    string `json:"media_type"`
-	FullImageURL string `json:"hdurl"`
-	URL          string `json:"url"`
-	Link         string
-}
-
-func readPicture(reader io.Reader) picture {
-	body, err := ioutil.ReadAll(reader)
+func makeAPIRequest(currentTime time.Time) (io.ReadCloser, error) {
+	currentDate := currentTime.Format("2006-01-02")
+	apiURL := fmt.Sprintf(apodAPIURL, currentDate)
+	resp, err := http.Get(apiURL)
 	if err != nil {
-		logError(err)
+		return nil, err
 	}
 
-	var item picture
-	err = json.Unmarshal(body, &item)
+	fmt.Println("APOD API response:", resp.StatusCode)
+	err = checkResponseStatus(resp)
 	if err != nil {
-		logError(err)
+		return nil, err
 	}
 
-	item.removeAds()
-
-	// Sometimes copyright contains new lines :shrug:
-	item.Copyright = strings.ReplaceAll(item.Copyright, "\n", " ")
-	return item
+	return resp.Body, nil
 }
 
-func (p *picture) removeAds() {
-	adStartIndex := strings.Index(p.Explanation, "   ")
-	if adStartIndex != -1 {
-		p.Explanation = p.Explanation[0:adStartIndex]
+func makeHTMLRequest(currentTime time.Time) (io.ReadCloser, error) {
+	currentDate := currentTime.Format("060102")
+	url := fmt.Sprintf(apodPageURL, currentDate)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
 	}
+
+	fmt.Println("APOD HTML response:", resp.StatusCode)
+	err = checkResponseStatus(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
 }
 
-func checkResponseStatus(resp *http.Response) error {
-	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("Bad response status: %s %s", resp.Status, string(body))
+func openTestFile(fileName string) (io.ReadCloser, error) {
+	f, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
 	}
-	return nil
-}
-
-// func firstWords(s string, count int) string {
-// 	runes := []rune(s)
-// 	for i := range runes {
-// 		if unicode.IsSpace(runes[i]) {
-// 			count--
-// 			if count == 0 {
-// 				return string(runes[0:i])
-// 			}
-// 		}
-// 	}
-// 	return s
-// }
-
-func firstSentences(s string, count int) string {
-	for i := range s {
-		c := s[i]
-		if strings.ContainsAny(string(c), "?.!") {
-			count--
-			if count == 0 {
-				return string(s[0:i])
-			}
-		}
-	}
-	return s
+	return f, nil
 }
 
 func pictureURL(p picture) string {
@@ -101,33 +70,9 @@ func pictureURL(p picture) string {
 	}
 	pictureDate := pictureTime.Format(dateFormat)
 	if pictureDate != time.Now().Format(dateFormat) {
-		logError("Picture's date doesn't match current date:", pictureDate)
+		logError("Picture's date doesn't match the current date:", pictureDate)
 	}
 	return fmt.Sprintf(apodPageURL, pictureDate)
-}
-
-func makeRequest(currentDate string) io.ReadCloser {
-	apiURL := fmt.Sprintf(apodAPIURL, currentDate)
-	resp, err := http.Get(apiURL)
-	if err != nil {
-		logError(err)
-	}
-
-	fmt.Println("APOD API response:", resp.StatusCode)
-	err = checkResponseStatus(resp)
-	if err != nil {
-		logError(err)
-	}
-
-	return resp.Body
-}
-
-func openTestFile(fileName string) io.ReadCloser {
-	f, err := os.Open(fileName)
-	if err != nil {
-		logError(err)
-	}
-	return f
 }
 
 var sendError func(text string) error = func(string) error {
@@ -137,8 +82,33 @@ var sendError func(text string) error = func(string) error {
 func logError(v ...interface{}) {
 	appname := filepath.Base(os.Args[0])
 	text := fmt.Sprintln(v...)
-	sendError("Error from `" + appname + "`: " + text)
+	sendError("❗️`" + appname + "`: " + text)
 	log.Fatalln(text)
+}
+
+func logWarning(v ...interface{}) {
+	appname := filepath.Base(os.Args[0])
+	text := fmt.Sprintln(v...)
+	sendError("⚠️`" + appname + "`: " + text)
+	fmt.Println(text)
+}
+
+func pictureFromAPI(p *picture, t time.Time) error {
+	reader, err := makeAPIRequest(t)
+	if err != nil {
+		logError(err)
+	}
+	defer reader.Close()
+	return makePictureFromAPI(reader, p)
+}
+
+func pictureFromHTML(p *picture, t time.Time) error {
+	reader, err := makeHTMLRequest(t)
+	if err != nil {
+		logError(err)
+	}
+	defer reader.Close()
+	return makePictureFromHTML(reader, p)
 }
 
 func main() {
@@ -180,10 +150,16 @@ func main() {
 		return
 	}
 
-	reader := makeRequest(currentDate)
-	//reader, _ := os.Open("api-2020-01-01.json")
-	defer reader.Close()
-	item := readPicture(reader)
+	var item picture
+	// try to get data from API first
+	err = pictureFromAPI(&item, currentTime)
+	if err != nil {
+		logWarning("Got error from API", err)
+		err = pictureFromHTML(&item, currentTime)
+		if err != nil {
+			logError(err)
+		}
+	}
 	item.Link = pictureURL(item)
 
 	var send func(picture, string, int64) error

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -37,6 +38,19 @@ type tgDocumentMessage struct {
 	Text    string `json:"caption"`
 	FileURL string `json:"document"`
 	Silent  bool   `json:"disable_notification"`
+}
+
+func firstSentences(s string, count int) string {
+	for i := range s {
+		c := s[i]
+		if strings.ContainsAny(string(c), "?.!") {
+			count--
+			if count == 0 {
+				return string(s[0:i])
+			}
+		}
+	}
+	return s
 }
 
 func fillForm(b *bytes.Buffer, chatID int64, caption string, remoteFileURL string) (string, error) {
