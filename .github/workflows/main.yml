@@ -1,7 +1,6 @@
 name: CI
 
-on:
-  push:
+on: [push]
 
 jobs:
   build:
@@ -10,8 +9,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Install dependencies
+      run: go get -u github.com/antchfx/htmlquery
+
     - name: Build the app
       run: go build
 
     - name: Run tests
-      run: go test -run ''
+      run: go test -v .
