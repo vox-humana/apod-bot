@@ -19,7 +19,7 @@ jobs:
     - name: Build the app
       run: go build
 
-    - name: Run the bot
+    - name: Run TG bot
       shell: bash
       env:
         TG_TOKEN: ${{ secrets.TG_TOKEN }}
@@ -36,5 +36,6 @@ jobs:
       run: |
         git config --local user.email "$GITHUB_ACTOR"
         git config --local user.name "GitHub Action"
+        git add conf.txt 
         git commit -m "Update configuration"
         git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:master
