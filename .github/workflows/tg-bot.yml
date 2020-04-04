@@ -1,0 +1,34 @@
+name: Run TG
+
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: '7,47 6-8 * * *'
+
+jobs:
+  bot-run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: go get -u github.com/antchfx/htmlquery
+
+    - name: Build the app
+      run: go build
+
+    - name: Run the bot
+      shell: bash
+      env:
+        TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        TG_NOTIFICATIONS_CHAT: ${{ secrets.TG_NOTIFICATIONS_CHAT }}
+      run: |
+        apod-bot -token ${TG_TOKEN} -chat ${TG_CHAT_ID} -service tg -err_chat ${TG_NOTIFICATIONS_CHAT}
+
+    - name: Commit configuration file
+      if: git status -s
+      run: |
+        git commit -m "Update configuration"
+        git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:master
