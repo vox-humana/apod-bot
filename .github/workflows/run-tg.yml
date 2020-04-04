@@ -26,7 +26,7 @@ jobs:
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         TG_NOTIFICATIONS_CHAT: ${{ secrets.TG_NOTIFICATIONS_CHAT }}
       run: |
-        apod-bot -token ${TG_TOKEN} -chat ${TG_CHAT_ID} -service tg -err_chat ${TG_NOTIFICATIONS_CHAT}
+        ./apod-bot -token ${TG_TOKEN} -chat ${TG_CHAT_ID} -service tg -err_chat ${TG_NOTIFICATIONS_CHAT}
         if [ -n "$(git status --untracked-files=no -s)" ]; then
           echo "::set-env name=HAS_GIT_CHANGES::true"
         fi
