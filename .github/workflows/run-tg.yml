@@ -4,6 +4,7 @@ on:
   schedule:
     # * is a special character in YAML so you have to quote this string
     - cron:  '7,47 6-8 * * *'
+    - repository_dispatch:
 
 jobs:
   bot-run:
@@ -26,9 +27,12 @@ jobs:
         TG_NOTIFICATIONS_CHAT: ${{ secrets.TG_NOTIFICATIONS_CHAT }}
       run: |
         apod-bot -token ${TG_TOKEN} -chat ${TG_CHAT_ID} -service tg -err_chat ${TG_NOTIFICATIONS_CHAT}
+        if [ -n "$(git status --untracked-files=no -s)" ]; then
+          echo "::set-env name=HAS_GIT_CHANGES::true"
+        fi
 
     - name: Commit configuration file
-      if: git status -s
+      if: env.HAS_GIT_CHANGES
       run: |
         git commit -m "Update configuration"
         git push "https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:master
