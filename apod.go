@@ -132,7 +132,7 @@ func main() {
 		}
 	}
 
-	lastDate := readLastSentDate()
+	lastDate := readLastSentDate(service)
 	fmt.Println("Last sent date:", lastDate)
 
 	currentTime := time.Now()
@@ -177,5 +177,5 @@ func main() {
 		logError(strings.ToUpper(service), err)
 	}
 
-	saveCurrentDate(currentDate)
+	saveCurrentDate(service, currentDate)
 }
