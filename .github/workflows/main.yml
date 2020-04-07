@@ -17,3 +17,9 @@ jobs:
 
     - name: Run tests
       run: go test -v .
+    
+    - name: Archive binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: apod-bot
+        path: apod-bot
