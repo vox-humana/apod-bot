@@ -32,7 +32,6 @@ func configFilePath() string {
 func readConfig() map[string]Config {
 	body, err := ioutil.ReadFile(configFilePath())
 	if err != nil {
-		fmt.Println("Can't read config:", err)
 		return map[string]Config{}
 	}
 

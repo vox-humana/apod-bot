@@ -6,8 +6,10 @@ import (
 	"testing"
 )
 
+const testDataFolder = "test_data"
+
 func openTestFile(fileName string) (io.ReadCloser, error) {
-	f, err := os.Open(fileName)
+	f, err := os.Open(testDataFolder + "/" + fileName)
 	if err != nil {
 		return nil, err
 	}

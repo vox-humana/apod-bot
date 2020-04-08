@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"testing"
 )
@@ -15,7 +14,10 @@ func TestEmptyConfig(t *testing.T) {
 	}
 
 	saveCurrentDate("test", "2020-04-04")
-	fmt.Println("Full config: ", readConfig())
+	config := readConfig()
+	if len(config) == 0 {
+		t.Error("Saved config shouldn't be empty")
+	}
 
 	if readLastSentDate("test") == "" {
 		t.Error("Last date should not be empty")
