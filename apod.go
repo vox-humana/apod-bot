@@ -88,7 +88,7 @@ func logWarning(v ...interface{}) {
 func pictureFromAPI(p *picture, t time.Time) error {
 	reader, err := makeAPIRequest(t)
 	if err != nil {
-		logError(err)
+		return err
 	}
 	defer reader.Close()
 	return makePictureFromAPI(reader, p)
