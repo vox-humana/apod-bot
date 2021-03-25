@@ -162,17 +162,36 @@ func tgSendPicture(picture picture, token string, chat int64) error {
 		return err
 	}
 
+	// Bots can currently send files of any type of up to 50 MB in size, this limit may be changed in the future. 🤦‍♂️
+	// https://core.telegram.org/bots/api#senddocument
+	const maxLength = 50 * 1024 * 1024
+	fullImageURL := picture.FullImageURL
+	length, err := getContentLength(fullImageURL)
+	if length >= maxLength {
+		logWarning("Picture is too big for TG", fullImageURL)
+		return nil
+	}
+
 	documentCaption := ""
 	if len(picture.Copyright) > 0 {
 		documentCaption = "© " + picture.Copyright
 	}
-	// document := tgDocumentMessage{chat, documentCaption, picture.FullImageURL, true}
-	// err = tgSendMessage(document, tgSendFileTemplate, token)
-	return tgSendDocument(chat, documentCaption, picture.FullImageURL, token)
+	return tgSendDocument(chat, documentCaption, fullImageURL, token)
 }
 
 func tgSendVideo(picture picture, token string, chat int64) error {
 	text := "[" + picture.Title + "](" + picture.URL + ")\n" + picture.Explanation
 	message := tgMessage{chat, text, tgParseModeMarkdown}
 	return tgSendMessage(message, tgSendMessageTemplate, token)
+}
+
+func getContentLength(url string) (int64, error) {
+	res, err := http.Head(url)
+	if err != nil {
+		return 0, err
+	}
+
+	contentlength := res.ContentLength
+	fmt.Println("TG: Full image ContentLength:", contentlength)
+	return contentlength, nil
 }
